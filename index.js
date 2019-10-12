@@ -1,7 +1,9 @@
-const { Gpio } = require('pigpio');
+const Gpio = require('./gpio');
 const mqtt = require('mqtt');
 const { safeLoad } = require('js-yaml');
 const { readFile } = require('fs').promises;
+
+const FADE_TIMEOUT = 1;
 
 (async () => {
     const configContent = await readFile('./config.yml');
@@ -22,8 +24,11 @@ function configureLight(name, light, broker) {
     const state = {
         brightness: 255,
         temperature: 153,
-        power: true
+        power: true,
+        values: new WeakMap()
     };
+    state.values.set(warmPin, 0);
+    state.values.set(coldPin, 0);
     const lightTopic = `lights/${name}/set`;
     const stateTopic = `lights/${name}`;
     broker.on('message', (topic, message) => {
@@ -67,14 +72,54 @@ function applyTemperature(payload, state) {
 
 function writeState(state, warm, cold) {
     if (!state.power) {
-        warm.pwmWrite(0);
-        cold.pwmWrite(0);
+        fade(state, {
+            pin: warm,
+            value: 0
+        }, {
+            pin: cold,
+            value: 0
+        });
         return;
     }
     const warmValue = Math.round(calculateWarm(state.temperature) * 255);
     const coldValue = Math.round(calculateCold(state.temperature) * 255);
-    warm.pwmWrite(warmValue);
-    cold.pwmWrite(coldValue);
+    fade(state, {
+        pin: warm,
+        value: warmValue
+    }, {
+        pin: cold,
+        value: coldValue
+    });
+}
+
+function fade(state, warm, cold) {
+    clearInterval(state.interval);
+
+    function write(pin, value) {
+        state.values.set(pin, value);
+        pin.pwmWrite(value);
+    }
+
+    state.interval = setInterval(() => {
+        let currentWarm = state.values.get(warm.pin);
+        let currentCold = state.values.get(cold.pin);
+
+        if (currentWarm > warm.value) {
+            currentWarm--;
+        } else if (currentWarm < warm.value) {
+            currentWarm++;
+        }
+        if (currentCold > cold.value) {
+            currentCold--;
+        } else if (currentCold < cold.value) {
+            currentCold++;
+        }
+        write(cold.pin, currentCold);
+        write(warm.pin, currentWarm);
+        if (currentCold === cold.value && currentWarm === warm.value) {
+            clearInterval(state.interval);
+        }
+    }, FADE_TIMEOUT);
 }
 
 function calculateCold(x) {
