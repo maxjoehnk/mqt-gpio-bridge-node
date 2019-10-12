@@ -81,8 +81,8 @@ function writeState(state, warm, cold) {
         });
         return;
     }
-    const warmValue = Math.round(calculateWarm(state.temperature) * 255);
-    const coldValue = Math.round(calculateCold(state.temperature) * 255);
+    const warmValue = Math.round(calculateWarm(state.temperature) * state.brightness);
+    const coldValue = Math.round(calculateCold(state.temperature) * state.brightness);
     fade(state, {
         pin: warm,
         value: warmValue
