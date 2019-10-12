@@ -1,0 +1,17 @@
+{
+  "name": "mqtt-gpio-bridge-node",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "js-yaml": "^3.13.1",
+    "mqtt": "^3.0.0",
+    "pigpio": "^2.0.1"
+  }
+}
