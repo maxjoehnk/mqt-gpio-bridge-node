@@ -17,8 +17,8 @@ const { readFile } = require('fs').promises;
 })();
 
 function configureLight(name, light, broker) {
-    const warmPin = new Gpio(temperatures.warm, { mode: Gpio.OUTPUT });
-    const coldPin = new Gpio(temperatures.cold, { mode: Gpio.OUTPUT });
+    const warmPin = new Gpio(light.temperatures.warm, { mode: Gpio.OUTPUT });
+    const coldPin = new Gpio(light.temperatures.cold, { mode: Gpio.OUTPUT });
     const state = {
         brightness: 255,
         temperature: 153,
