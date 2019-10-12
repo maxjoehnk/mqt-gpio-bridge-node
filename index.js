@@ -1,7 +1,7 @@
 const { Gpio } = require('pigpio');
 const mqtt = require('mqtt');
-const {safeLoad} = require('js-yaml');
-const {readFile} = require('fs').promises;
+const { safeLoad } = require('js-yaml');
+const { readFile } = require('fs').promises;
 
 (async () => {
     const configContent = await readFile('./config.yml');
@@ -16,24 +16,14 @@ const {readFile} = require('fs').promises;
 
 })();
 
-function publishState(broker, stateTopic, state) {
-    broker.publish(stateTopic, JSON.stringify({
-        state: state.power ? 'ON' : 'OFF',
-        brightness: state.brightness,
-        color_temp: kelvinToMired(state.temperature)
-    }));
-}
-
 function configureLight(name, light, broker) {
     const temperatures = [...light.temperatures];
     temperatures.sort((a, b) => a.color - b.color);
-    const warm = temperatures[0];
-    const cold = temperatures[1];
-    const warmPin = new Gpio(warm.pin, {mode: Gpio.OUTPUT});
-    const coldPin = new Gpio(cold.pin, {mode: Gpio.OUTPUT});
+    const warmPin = new Gpio(temperatures.warm, { mode: Gpio.OUTPUT });
+    const coldPin = new Gpio(temperatures.cold, { mode: Gpio.OUTPUT });
     const state = {
         brightness: 255,
-        temperature: warm.color,
+        temperature: 153,
         power: true
     };
     const lightTopic = `lights/${name}/set`;
@@ -47,7 +37,7 @@ function configureLight(name, light, broker) {
         applyPower(payload, state);
         applyBrightness(payload, state);
         applyTemperature(payload, state);
-        writeState(state, {pin: warmPin, color: warm.color}, {pin: coldPin, color: cold.color});
+        writeState(state, warmPin, coldPin);
         publishState(broker, stateTopic, state);
     });
     broker.subscribe(lightTopic, (err) => {
@@ -73,37 +63,34 @@ function applyBrightness(payload, state) {
 
 function applyTemperature(payload, state) {
     if ('color_temp' in payload) {
-        state.temperature = miredToKelvin(payload.color_temp);
+        state.temperature = payload.color_temp;
     }
-}
-
-function miredToKelvin(mired) {
-    return Math.round(1000000 / mired);
-}
-
-function kelvinToMired(kelvin) {
-    return Math.round(1000000 / kelvin);
 }
 
 function writeState(state, warm, cold) {
     if (!state.power) {
-        warm.pin.pwmWrite(0);
-        cold.pin.pwmWrite(0);
+        warm.pwmWrite(0);
+        cold.pwmWrite(0);
         return;
     }
-    const temperature = Math.min(Math.max(state.temperature, warm.color), cold.color);
-    const warmValue = Math.round(calculateWarm(temperature) * 255);
-    const coldValue = Math.round(calculateCold(temperature) * 255);
-    warm.pin.pwmWrite(warmValue);
-    cold.pin.pwmWrite(coldValue);
+    const warmValue = Math.round(calculateWarm(state.temperature) * 255);
+    const coldValue = Math.round(calculateCold(state.temperature) * 255);
+    warm.pwmWrite(warmValue);
+    cold.pwmWrite(coldValue);
 }
 
-// for cold = 7000 and warm = 2800
-function calculateCold(target) {
-    return 1 / 4200 * target - 2 / 3
+function calculateCold(x) {
+    return -1 / 365 * x + 100 / 73;
 }
 
-// for cold = 7000 and warm = 2800
-function calculateWarm(target) {
-    return -1 / 4200 * target + 5 / 3;
+function calculateWarm(x) {
+    return 1 / 365 * x - 27 / 73;
+}
+
+function publishState(broker, stateTopic, state) {
+    broker.publish(stateTopic, JSON.stringify({
+        state: state.power ? 'ON' : 'OFF',
+        brightness: state.brightness,
+        color_temp: state.temperature
+    }));
 }
